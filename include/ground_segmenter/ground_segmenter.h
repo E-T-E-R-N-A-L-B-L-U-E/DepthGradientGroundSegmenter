@@ -25,8 +25,8 @@ public:
     void setInputCloud(const typename::pcl::PointCloud<PointT>::Ptr &input_cloud);
     void setGridSize(const float &grid_size);
     void setMinMaxHeight(const float &min_height, const float &max_height);
-    cv::Mat toGridMap(const float &resolution, const bool &bird_view_flag = true) const;
-
+    cv::Mat toDepth(const float &resolution, const bool &bird_view_flag = true) const;
+    void groundSegment(typename::pcl::PointCloud<PointT>::Ptr &output_cloud, const float pass_angle = 30.f) const;
 };
 
 #include "ground_segmenter.tpp"

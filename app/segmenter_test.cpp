@@ -9,6 +9,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <chrono>
 
 #include "ground_segmenter/ground_segmenter.h"
 
@@ -38,7 +39,7 @@ int main(int argc, char** argv)
     ground_segmenter.setGridSize(0.1);
     ground_segmenter.setMinMaxHeight(-1, 2);
     
-    cv::Mat depth = ground_segmenter.toGridMap(0.05, true);
+    cv::Mat depth = ground_segmenter.toDepth(0.05, true);
     float min_depth = 1e10, max_depth = -1e10;
     for (int i = 0; i < depth.rows; i++)
         for (int j = 0; j < depth.cols; j++)
@@ -58,11 +59,17 @@ int main(int argc, char** argv)
     cv::imshow("depth", depth2show);
     cv::waitKey(0);
 
+    pcl::PointCloud<pcl::PointXYZ>::Ptr output_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+    auto t1 = std::chrono::system_clock::now();
+    ground_segmenter.groundSegment(output_cloud, 30.f);
+    auto t2 = std::chrono::system_clock::now();
+    std::cout << "segmentation time cost(ms): " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << std::endl;
+
     // visualization
-    // pcl::visualization::PCLVisualizer vis("vis");
-    // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> target_handler(filtered_pcd, 255.0, 0.0, 0.0);
-    // vis.addPointCloud(filtered_pcd, target_handler, "target");
-    // vis.spin();
-    // vis.close();
+    pcl::visualization::PCLVisualizer vis("vis");
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> target_handler(output_cloud, 255.0, 0.0, 0.0);
+    vis.addPointCloud(output_cloud, target_handler, "target");
+    vis.spin();
+    vis.close();
     return 0;
 }

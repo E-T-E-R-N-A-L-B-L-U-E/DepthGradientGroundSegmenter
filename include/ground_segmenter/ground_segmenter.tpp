@@ -2,8 +2,11 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/visualization/cloud_viewer.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/features/normal_3d.h>
 
 #include <cmath>
+#include <assert.h>
 
 template<typename PointT>
 GroundSegmenter<PointT>::GroundSegmenter()
@@ -53,7 +56,7 @@ void GroundSegmenter<PointT>::passthroughFilter(const typename::pcl::PointCloud<
 }
 
 template<typename PointT>
-cv::Mat GroundSegmenter<PointT>::toGridMap(const float &resolution, const bool &bird_view_flag) const
+cv::Mat GroundSegmenter<PointT>::toDepth(const float &resolution, const bool &bird_view_flag) const
 {
     typename::pcl::PointCloud<PointT>::Ptr filtered_pcd(new typename::pcl::PointCloud<PointT>());
 
@@ -93,4 +96,39 @@ cv::Mat GroundSegmenter<PointT>::toGridMap(const float &resolution, const bool &
             = select(filtered_pcd->points[i].z, grid_map.at<float>(static_cast<int>((filtered_pcd->points[i].y - y_min) / resolution), static_cast<int>((filtered_pcd->points[i].x - x_min) / resolution)));
     }
     return grid_map;
+}
+
+template<typename PointT>
+void GroundSegmenter<PointT>::groundSegment(typename::pcl::PointCloud<PointT>::Ptr &output_cloud, const float pass_angle) const
+{
+    assert(pass_angle >= 0);
+    typename::pcl::PointCloud<PointT>::Ptr filtered_pcd(new typename::pcl::PointCloud<PointT>());
+
+    if (this->_grid_size > 0)
+    {
+        voxelFilter(this->_input_cloud, filtered_pcd);
+        passthroughFilter(filtered_pcd, filtered_pcd);
+    } else
+    {
+        passthroughFilter(this->_input_cloud, filtered_pcd);
+    }
+
+    typename::pcl::NormalEstimation<PointT, pcl::Normal> normal;
+    typename::pcl::PointCloud<pcl::Normal>::Ptr pcd_normals(new typename::pcl::PointCloud<pcl::Normal>());
+    typename::pcl::search::KdTree<PointT>::Ptr kd_tree(new typename::pcl::search::KdTree<PointT>());
+
+    normal.setInputCloud(filtered_pcd);
+    normal.setSearchMethod(kd_tree);
+    normal.setKSearch(10);
+    // normal.setRadiusSearch(0.5);
+    normal.compute(*pcd_normals);
+
+    output_cloud->clear();
+    for (int i = 0; i < filtered_pcd->points.size(); i++)
+    {
+        typename::pcl::Normal norm = pcd_normals->points[i];
+        float norm_len = std::sqrt(norm.normal_x * norm.normal_x + norm.normal_y * norm.normal_y + norm.normal_z * norm.normal_z);
+        if (std::fabs(norm.normal_z / norm_len) < std::sin(pass_angle / 180.F * M_PI))
+            output_cloud->push_back(filtered_pcd->points[i]);
+    }
 }
